@@ -1,29 +1,3 @@
-// require('dotenv').config();
-// const express = require('express');
-
-import dotenv from 'dotenv';
-import express from 'express';
-
-dotenv.config();
-
-
-const app = express();
-const PORT = process.env.PORT || 3009;
-
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  
-  next();
-});
-
-const HOSTAWAY_CLIENT_ID = process.env.HOSTAWAY_CLIENT_ID;
-const HOSTAWAY_CLIENT_SECRET = process.env.HOSTAWAY_CLIENT_SECRET;
 
 const MOCK_REVIEWS = [
   {
@@ -130,42 +104,15 @@ const MOCK_REVIEWS = [
   }
 ];
 
-
-export default async function handler(req, res) {
-  // Enable CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  try {
-    return res.status(200).json({
-      status: "success",
-      result: MOCK_REVIEWS
-    });
-  } catch (error) {
-    return res.status(500).json({
-      status: "error",
-      result: [],
-      error: 'Failed to fetch reviews',
-      message: error.message
-    });
-  }
-}
-
-// NB: Recruiter, this func is only useful  if we want to fetch real data with the creds you sent to my email.
+/**
+ * Fetches access token from Hostaway API
+ * Note: Only useful if you want to fetch real data
+ */
 async function getHostawayToken() {
   const authData = new URLSearchParams({
     grant_type: "client_credentials",
-    client_id: HOSTAWAY_CLIENT_ID,
-    client_secret: HOSTAWAY_CLIENT_SECRET,
+    client_id: process.env.HOSTAWAY_CLIENT_ID,
+    client_secret: process.env.HOSTAWAY_CLIENT_SECRET,
     scope: "general"
   });
 
@@ -182,100 +129,87 @@ async function getHostawayToken() {
   return result.access_token;
 }
 
-app.get('/', (req, res) => {
-  res.json({
-    message: 'Flex Living Reviews API',
-    endpoints: {
-      health: '/health',
-      reviews: '/api/reviews/hostaway',
-    }
-  });
-});
+/**
+ * Vercel Serverless Function Handler
+ * Endpoint: /api/reviews/hostaway
+ */
+export default async function handler(req, res) {
+  // Enable CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Flex Living API is running' });
-});
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
 
+  // Only allow GET requests
+  if (req.method !== 'GET') {
+    return res.status(405).json({ 
+      status: "error",
+      error: 'Method not allowed' 
+    });
+  }
 
-app.get('/api/reviews/hostaway', async (req, res) => {
   try {
-    
-    
     /*
     Dear Recruiter, Kindly note below:
-    I tested the hostway API, there is no reviews for the provided API credentials,
-    so I decided to return mock data instead, you can uncomment the fetch code below to get real data if you have reviews in your Hostaway account 
-    
+    I tested the Hostaway API, there are no reviews for the provided API credentials,
+    so I'm returning mock data instead. You can uncomment the code below to fetch real data
+    if you have reviews in your Hostaway account.
     */
 
-    /*
-    try{
+    let normalizedReviews = MOCK_REVIEWS;
 
-        const token = await getHostawayToken();
-        const response = await fetch("https://api.hostaway.com/v1/reviews", {
+    /*
+    // Uncomment this block to fetch from real Hostaway API
+    try {
+      const token = await getHostawayToken();
+      const response = await fetch("https://api.hostaway.com/v1/reviews", {
         method: "GET",
         headers: {
-            "Authorization": `Bearer ${token}`,
-            "Cache-Control": "no-cache"
+          "Authorization": `Bearer ${token}`,
+          "Cache-Control": "no-cache"
         }
-        });
+      });
 
-        if (!response.ok) {
-        throw new Error(`Hostaway API error: ${response.status}`);
-        }
-
+      if (response.ok) {
         const data = await response.json();
         
-        const normalizedReviews = (data.result || []).map(review => ({
-        id: review.id,
-        type: "guest-to-host",
-        status: review.status || "published",
-        rating: review.rating || 0,
-        publicReview: review.reply || review.comment || "",
-        reviewCategory: review.reviewCategoryScores || [],
-        submittedAt: review.createdAt || new Date().toISOString(),
-        guestName: review.guestName || "Anonymous",
-        listingName: review.listingMapName || review.listingName || "Unknown Property",
-        channel: review.channelName || "Hostaway"
-        }));
-
-        res.json({
-        status: "success",
-        result: normalizedReviews
-        });
-
-    } catch(apiError){
-      console.error('Error fetching from Hostaway API, returning mock data instead:', apiError);
+        if (data.result && data.result.length > 0) {
+          normalizedReviews = data.result.map(review => ({
+            id: review.id,
+            type: "guest-to-host",
+            status: review.status || "published",
+            rating: review.rating || 0,
+            publicReview: review.reply || review.comment || "",
+            reviewCategory: review.reviewCategoryScores || [],
+            submittedAt: review.createdAt || new Date().toISOString(),
+            guestName: review.guestName || "Anonymous",
+            listingName: review.listingMapName || review.listingName || "Unknown Property",
+            channel: review.channelName || "Hostaway"
+          }));
+        }
+      }
+    } catch (apiError) {
+      console.error('Error fetching from Hostaway API, using mock data:', apiError);
+      // Falls back to mock data
     }
     */
 
-    /*
-    Since there are no reviews in the Hostaway account for the provided credentials,
-    returning mock review data defined above. You may comment this block and uncomment the fetch code above to get real data if available.
-    */
-    const normalizedReviews = MOCK_REVIEWS;
-
-    res.json({
+    return res.status(200).json({
       status: "success",
       result: normalizedReviews
     });
-    
-    
 
   } catch (error) {
-    console.error('Error fetching Hostaway reviews:', error);
-    res.status(500).json({
+    console.error('Error in serverless function:', error);
+    return res.status(500).json({
       status: "error",
       result: [],
-      error: 'Failed to fetch reviews from Hostaway',
+      error: 'Failed to fetch reviews',
       message: error.message
     });
   }
-});
-
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`Access reviews at: http://localhost:${PORT}/api/reviews/hostaway`);
-});
+}
