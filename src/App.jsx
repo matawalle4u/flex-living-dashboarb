@@ -68,7 +68,8 @@ const WarningBanner = ({ message, onDismiss }) => {
 };
 
 const fetchHostawayReviews = async () => {
-  const response = await fetch('http://localhost:3009/api/reviews/hostaway');
+  // const response = await fetch('http://localhost:3009/api/reviews/hostaway');
+  const response = await fetch('/api/reviews/hostaway');
   
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
