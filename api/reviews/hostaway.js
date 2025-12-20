@@ -165,7 +165,7 @@ export default async function handler(req, res) {
     */
 
     // rawReviews = MOCK_REVIEWS_RAW;
-    // const normalizedReviews = rawReviews.map(normalizeHostawayReview);
+    // const normalizedReviews = rawReviews.map(review => normalizeHostawayReview(review));
 
     /*
     // Uncomment this block to fetch from real Hostaway API
