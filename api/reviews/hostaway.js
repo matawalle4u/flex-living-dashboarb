@@ -1,3 +1,4 @@
+import { normalizeReviews } from '../../utils/reviewNormalizer.js';
 
 const MOCK_REVIEWS_RAW = [
   {
@@ -104,21 +105,6 @@ const MOCK_REVIEWS_RAW = [
   }
 ];
 
-function normalizeHostawayReview(review) {
-  return {
-    id: review.id,
-    type: review.type || "guest-to-host",
-    status: review.status || "published",
-    rating: review.rating || 0,
-    publicReview: review.reply || review.comment || review.publicReview || "",
-    reviewCategory: review.reviewCategoryScores || review.reviewCategory || [],
-    submittedAt: review.createdAt || review.submittedAt || new Date().toISOString(),
-    guestName: review.guestName || "Anonymous",
-    listingName: review.listingMapName || review.listingName || "Unknown Property",
-    channel: review.channelName || review.channel || "Hostaway"
-  };
-}
-
 /**
  * Fetches access token from Hostaway API
  * Note: Only useful if you want to fetch real data
@@ -168,7 +154,9 @@ export default async function handler(req, res) {
 
   try {
 
-    let rawReviews = [];
+    let normalizedReviews = [];
+    let source = 'mock';
+    let apiUsed = false;
     /*
     Dear Recruiter, Kindly note below:
     I tested the Hostaway API, there are no reviews for the provided API credentials,
@@ -176,8 +164,8 @@ export default async function handler(req, res) {
     if you have reviews in your Hostaway account.
     */
 
-    rawReviews = MOCK_REVIEWS_RAW;
-    const normalizedReviews = rawReviews.map(normalizeHostawayReview);
+    // rawReviews = MOCK_REVIEWS_RAW;
+    // const normalizedReviews = rawReviews.map(normalizeHostawayReview);
 
     /*
     // Uncomment this block to fetch from real Hostaway API
@@ -195,8 +183,9 @@ export default async function handler(req, res) {
         const data = await response.json();
         
         if (data.result && data.result.length > 0) {
-          normalizedReviews = (data.result || []).map(normalizeHostawayReview);
+          normalizedReviews = normalizeReviews(data.result, 'hostaway');
           source = 'hostaway_api';
+          apiUsed = true;
         }
       }
     } catch (apiError) {
@@ -205,13 +194,20 @@ export default async function handler(req, res) {
     }
     */
 
+    // Fall back to mock data if API not used or failed
+    if (!apiUsed || normalizedReviews.length === 0) {
+      normalizedReviews = normalizeReviews(MOCK_REVIEWS_RAW, 'mock');
+      source = 'mock';
+    }
+
     return res.status(200).json({
       status: "success",
       result: normalizedReviews,
       meta: {
         count: normalizedReviews.length,
-        source: rawReviews === MOCK_REVIEWS_RAW ? 'mock' : 'hostaway_api',
-        normalized: true
+        source: source,
+        normalized: true,
+        timeStamp: new Date().toISOString()
       }
     });
 
