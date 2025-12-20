@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Star, Filter, TrendingUp, Building2, Calendar, MessageSquare, Check, X, Eye, AlertCircle, XCircle, RefreshCw } from 'lucide-react';
-
+import { normalizeReview, isValidNormalizedReview } from '../utils/reviewNormalizer';
 const ErrorModal = ({ error, onClose, onRetry }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -80,7 +80,25 @@ const fetchHostawayReviews = async () => {
     };
   }
   
-  return await response.json();
+  const data = await response.json();
+  
+  //handle normalization verification
+  if (data.result && Array.isArray(data.result)) {
+    const validReviews = data.result.filter(review => 
+      isValidNormalizedReview(review)
+    );
+    
+    if (validReviews.length !== data.result.length) {
+      console.warn(`Filtered out ${data.result.length - validReviews.length} invalid reviews`);
+    }
+    
+    return {
+      ...data,
+      result: validReviews
+    };
+  }
+  
+  return data;
 };
 
 const FlexLivingDashboard = () => {
