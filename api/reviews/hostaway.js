@@ -1,5 +1,5 @@
 
-const MOCK_REVIEWS = [
+const MOCK_REVIEWS_RAW = [
   {
     id: 7453,
     type: "guest-to-host",
@@ -104,6 +104,21 @@ const MOCK_REVIEWS = [
   }
 ];
 
+function normalizeHostawayReview(review) {
+  return {
+    id: review.id,
+    type: review.type || "guest-to-host",
+    status: review.status || "published",
+    rating: review.rating || 0,
+    publicReview: review.reply || review.comment || review.publicReview || "",
+    reviewCategory: review.reviewCategoryScores || review.reviewCategory || [],
+    submittedAt: review.createdAt || review.submittedAt || new Date().toISOString(),
+    guestName: review.guestName || "Anonymous",
+    listingName: review.listingMapName || review.listingName || "Unknown Property",
+    channel: review.channelName || review.channel || "Hostaway"
+  };
+}
+
 /**
  * Fetches access token from Hostaway API
  * Note: Only useful if you want to fetch real data
@@ -134,17 +149,16 @@ async function getHostawayToken() {
  * Endpoint: /api/reviews/hostaway
  */
 export default async function handler(req, res) {
-  // Enable CORS
+  
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-  // Handle preflight requests
+  
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  // Only allow GET requests
   if (req.method !== 'GET') {
     return res.status(405).json({ 
       status: "error",
@@ -153,6 +167,8 @@ export default async function handler(req, res) {
   }
 
   try {
+
+    let rawReviews = [];
     /*
     Dear Recruiter, Kindly note below:
     I tested the Hostaway API, there are no reviews for the provided API credentials,
@@ -160,7 +176,8 @@ export default async function handler(req, res) {
     if you have reviews in your Hostaway account.
     */
 
-    let normalizedReviews = MOCK_REVIEWS;
+    rawReviews = MOCK_REVIEWS_RAW;
+    const normalizedReviews = rawReviews.map(normalizeHostawayReview);
 
     /*
     // Uncomment this block to fetch from real Hostaway API
@@ -178,18 +195,8 @@ export default async function handler(req, res) {
         const data = await response.json();
         
         if (data.result && data.result.length > 0) {
-          normalizedReviews = data.result.map(review => ({
-            id: review.id,
-            type: "guest-to-host",
-            status: review.status || "published",
-            rating: review.rating || 0,
-            publicReview: review.reply || review.comment || "",
-            reviewCategory: review.reviewCategoryScores || [],
-            submittedAt: review.createdAt || new Date().toISOString(),
-            guestName: review.guestName || "Anonymous",
-            listingName: review.listingMapName || review.listingName || "Unknown Property",
-            channel: review.channelName || "Hostaway"
-          }));
+          normalizedReviews = (data.result || []).map(normalizeHostawayReview);
+          source = 'hostaway_api';
         }
       }
     } catch (apiError) {
@@ -200,7 +207,12 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       status: "success",
-      result: normalizedReviews
+      result: normalizedReviews,
+      meta: {
+        count: normalizedReviews.length,
+        source: rawReviews === MOCK_REVIEWS_RAW ? 'mock' : 'hostaway_api',
+        normalized: true
+      }
     });
 
   } catch (error) {
